@@ -1,0 +1,149 @@
+---
+title: "Arbeidskrav_1_SOK1005"
+author: "38"
+format: html
+editor: visual
+---
+
+## Quarto
+
+Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
+
+## Running Code
+
+When you click the **Render** button a document will be generated that includes both content and the output of embedded code. You can embed code like this:
+
+```{r}
+1 + 1
+```
+
+You can add options to executable code like this
+
+```{r}
+#| echo: false
+2 * 2
+```
+
+The `echo: false` option disables the printing of code (only output is displayed).
+
+```{r}
+rm(list = ls())
+library(tidyverse)
+library(lubridate)
+library(zoo)
+```
+
+```{r}
+df_lowtro <- read_table2("https://www.nsstc.uah.edu/data/msu/v6.0/tlt/uahncdc_lt_6.0.txt")
+df_midtro <- read_table2("https://www.nsstc.uah.edu/data/msu/v6.0/tmt/uahncdc_mt_6.0.txt")
+df_trop <- read_table2("https://www.nsstc.uah.edu/data/msu/v6.0/ttp/uahncdc_tp_6.0.txt")
+df_strat <- read_table2("https://www.nsstc.uah.edu/data/msu/v6.0/tls/uahncdc_ls_6.0.txt")
+```
+
+```{r}
+#filtering out all the values except for globe from all the datasets
+
+df_lowtro <- df_lowtro %>% 
+  select(Globe)
+
+df_midtro <- df_midtro %>% 
+  select(Globe)
+
+df_strat <- df_strat %>% 
+  select(Globe)
+
+df_trop <- df_trop %>% 
+  select(Globe)
+```
+
+```{r}
+#Creating a function to make the data show a 12-month average, and filter out unnececary characters, in hindsight i could've probably made this function a lot more coprehensive, and save a lot of time later. 
+df_clean <- function(df) {
+  df <- df %>% 
+    filter(!grepl("[A-Za-z]", Globe)) %>%  # Corrected regex to filter out alphabetic characters
+    mutate(
+      Globe = as.numeric(Globe),  # Convert Globe to numeric
+      Rolling_avg = rollmean(Globe, 12, fill = NA, align = "right")  # 12-month rolling average
+    )
+  return(df)
+}
+  
+```
+
+```{r}
+#Using the new function to clean the data
+df_lowtro_clean <- df_clean(df_lowtro)
+df_midtro_clean <- df_clean(df_midtro)
+df_strat_clean <-  df_clean(df_strat)
+df_trop_clean <-  df_clean(df_trop)
+```
+
+```{r}
+#Create a new dataframe which consists of all the other data
+df_main <- data.frame(
+  Date = seq.Date(from = as.Date("1978-01-01"), by = "month", length.out = nrow(df_lowtro_clean)),
+  df_lowtro_clean = df_lowtro_clean$Rolling_avg,
+  df_midtro_clean = df_midtro_clean$Rolling_avg,
+  df_strat_clean = df_strat_clean$Rolling_avg,
+  df_trop_clean = df_trop_clean$Rolling_avg
+)
+
+df_main <- df_main %>%
+  # Compute row-wise average of selected columns
+  mutate(Average = rowMeans(select(., df_lowtro_clean:df_trop_clean), na.rm = TRUE)) %>%
+  # Filter for dates >= 1980
+  filter(Date >= as.Date("1980-01-01")) %>%
+  # Convert specified columns to numeric (this is redundant here, but included for consistency)
+  mutate(
+    df_lowtro_clean = as.numeric(df_lowtro_clean),
+    df_midtro_clean = as.numeric(df_midtro_clean),
+    df_strat_clean = as.numeric(df_strat_clean),
+    df_trop_clean = as.numeric(df_trop_clean)
+  )
+# Remove NA from data
+df_main <- df_main %>% 
+  filter(
+  !is.na(df_lowtro_clean),
+  !is.na(df_midtro_clean),
+  !is.na(df_strat_clean), 
+  !is.na(df_trop_clean)
+) %>% 
+mutate(
+  Average = rowMeans(select(., df_lowtro_clean :df_trop_clean ), na.rm = TRUE)
+)
+
+```
+
+```{r}
+ggplot(df_main, aes(x = Date)) +
+  geom_line(aes(y = df_lowtro_clean, color = "Lower Troposphere"), size = 1) +
+  geom_line(aes(y = df_midtro_clean, color = "Mid Troposphere"), size = 1) +
+  geom_line(aes(y = df_strat_clean, color = "Stratosphere"), size = 1) +
+  geom_line(aes(y = df_trop_clean, color = "Tropopause"), size = 1) +
+  geom_line(aes(y = Average, color = "Average"), size = 1.2, linetype = "dashed") +
+  labs(
+    title = "Changes in global temprature on a yearly basis",
+    x = "Time (Years)",
+    y = "Temperature (°C)",
+    color = "Zones"
+  ) +
+  scale_color_manual(
+    values = c(
+      "Lower Troposphere" = "blue",
+      "Mid Troposphere" = "green",
+      "Stratosphere" = "red",
+      "Tropopause" = "purple",
+      "Average" = "black"
+    )
+  ) +
+  theme_minimal()  
+
+
+
+           
+  
+        
+          
+  
+
+```
