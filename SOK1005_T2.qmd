@@ -1,0 +1,133 @@
+---
+title: "SOK1005_task_2"
+format: html
+editor: visual
+---
+
+## Quarto
+
+Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
+
+## Running Code
+
+When you click the **Render** button a document will be generated that includes both content and the output of embedded code. You can embed code like this:
+
+```{r}
+library(janitor)
+library(tidyverse)
+library(lubridate)
+
+
+url <- "https://raw.githubusercontent.com/uit-sok-1005-v23/uit-sok-1005-v23.github.io/main/storedata.csv"
+
+
+store_data <- read.csv(url, stringsAsFactors = FALSE)
+
+# Making the names simpler
+colnames(store_data) <- gsub("\\s+", "_", tolower(colnames(store_data)))   
+
+# Converting order_date to datetime
+store_data$order_date <- as.Date(store_data$order_date, format = "%Y-%m-%d")
+
+#converting sales to numeric
+store_data$sales <- as.numeric(store_data$sales)
+
+```
+
+You can add options to executable code like this
+
+```{r}
+#filtering the data to only have region 1 and region 9, aswell as only corporate and consumer, the last three months of 2017. 
+filtered_data <- store_data %>%
+  filter(region %in% c("Region 1", "Region 9"),  
+         customer_segment %in% c("Corporate", "Consumer"),  
+         order_date >= as.Date("2017-10-01") & order_date <= as.Date("2017-12-31"))  
+
+
+table_1 <- filtered_data %>%
+  group_by(Year = year(order_date), Month = month(order_date, label = TRUE)) %>%
+  summarise(Total_Sales = sum(sales, na.rm = TRUE)) %>%
+  arrange(Year, Month)
+print(table_1)
+```
+
+The `echo: false` option disables the printing of code (only output is displayed).
+
+```{r}
+library(ggrepel)
+#Defining month and year, thus making me able to calculate the montly total
+sales_by_year_month_region <- store_data %>%
+  group_by(Year = year(order_date), Month = month(order_date, label = TRUE), Region = region) %>%
+  summarise(Total_Sales = sum(sales, na.rm = TRUE), .groups = "drop") %>%
+  arrange(Year, Month, Region)
+
+
+sales_by_year_month_region %>%
+  filter(Region %in% c("Region 1", "Region 13"), Year > 2014) %>% 
+  ggplot(aes(x = Month, y = Total_Sales, fill = Region)) +
+  geom_col(position = "dodge") +  # Use side-by-side bars
+  theme_minimal() +
+  facet_wrap(~Year)+
+  labs(title = "Figure 1", 
+       x = "Month", y = "Total Sales") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) 
+```
+
+Figure 1 shows the monthly sales revenue over the span of three years, in the region 1 and region 13. We can see that region 1 has considerably higher sales revenue, yet there are a few month in which region 13 has the highest turnout.
+
+```{r}
+#using the filter function to select alle the 
+table_2 <- sales_by_year_month_region %>%
+  pivot_wider(names_from = Region, values_from = Total_Sales, values_fill = 0) %>%
+  rename(Region_1 = `Region 1`, Region_13 = `Region 13`) %>%  
+  filter(Region_13 > Region_1) 
+
+print(table_2)
+
+```
+
+```{r}
+table_3 <- store_data %>%
+  filter(year(order_date) == 2017,  
+         !region %in% c("Region 3", "Region 5", "Region 8")) %>%  
+  group_by(customer_segment, product_category) %>%
+  summarise(Average_Profit = mean(profit, na.rm = TRUE), .groups = "drop") %>%
+  arrange(desc(Average_Profit))  
+
+
+
+highest_segment <- table_3 %>%
+  slice(1)  
+
+
+print(highest_segment)
+
+```
+
+```{r}
+library(rvest)
+url <- "https://www.motor.no/aktuelt/motors-store-vintertest-av-rekkevidde-pa-elbiler/217132"
+webpage <- read_html(url)
+Motor<- html_table(html_nodes(webpage, "div table")[[1]])
+
+Motor <- Motor %>% 
+  mutate(
+    X2 = as.numeric(str_extract(X2, "\\d+")), 
+    X3 = as.numeric(str_extract(X3, "\\d+"))   
+  )
+
+model <- lm(X3 ~ X2, data = Motor)
+
+Motor %>% 
+  ggplot(aes(x = X2, y = X3)) +
+  geom_point() +  
+  geom_abline(slope = 1, intercept = 0, color = "red", size = 1) +  # 45-degree line
+  geom_smooth(method = "lm", color = "blue", se = TRUE) +
+  theme_minimal() +
+  labs(title = "Comparison of WLTP vs. Real-World Range", x = "WLTP (km)", y = "Tested Range (km)")
+
+
+
+```
+
+The graph show that there is a visible discrepancy between the theoretical maximum a car can drive and the tested results. However the graph still portrays a positive correlation between the actual tested range and the theoretical range.
