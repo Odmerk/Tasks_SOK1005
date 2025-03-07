@@ -1,0 +1,236 @@
+---
+title: "Untitled"
+format: html
+editor: visual
+---
+
+## Quarto
+
+Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
+
+## Running Code
+
+When you click the **Render** button a document will be generated that includes both content and the output of embedded code. You can embed code like this:
+
+```{r}
+library(readxl)
+library(tidyverse) 
+```
+
+You can add options to executable code like this
+
+```{r}
+# Load necessary libraries
+library(ggplot2)
+library(readxl)
+library(dplyr)
+
+
+data <- read_excel("C:/Users/nikol/Downloads/Ukraine_Tracker.xlsx", sheet = "Fig 6. With Refugee Support, €")
+
+# Cleaning the data, renaming the columns to make it way easier for myself
+data <- data %>%
+  rename(
+    Country = `Total bilateral allocations plus refugee costs (billion Euros)`,
+    Financial = ...2, 
+    Humanitarian = ...3, 
+    Military = ...4, 
+    Refugee_Cost = ...5, 
+    Total = ...6
+  )
+
+data <- data %>%
+  select(Country, Financial, Humanitarian, Military, Refugee_Cost, Total) %>%
+  filter(!is.na(Total))
+         
+
+
+
+```
+
+The `echo: false` option disables the printing of code (only output is displayed).
+
+```{r}
+#Giving the columns numeric value
+numeric_cols <- c("Financial", "Humanitarian", "Military", "Refugee_Cost", "Total")
+data[numeric_cols] <- lapply(data[numeric_cols], as.numeric)
+
+#Usding df long to turn alle the categories into in column, thus way easier to plot
+data_long <- tidyr::pivot_longer(data, cols = c("Financial", "Humanitarian", "Military", "Refugee_Cost"), 
+                                 names_to = "Category", values_to = "Value")
+
+```
+
+```{r}
+
+#Using scale manual fill to differantiate between the different froms of aid
+ggplot(data_long %>% filter(Country != "Total"),  # Exclude "Total" row
+       aes(x = reorder(Country, Total), y = Value, fill = Category)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  scale_fill_manual(values = c("Financial" = "blue", "Humanitarian" = "green", "Military" = "red", "Refugee_Cost" = "lightblue")) +
+  labs(title = "Total Bilateral Commitments Plus Refugee Costs (Billion Euros)",
+       x = "Country",
+       y = "Billion Euros",
+       fill = "Category") +
+  theme_minimal()
+```
+
+```{r}
+library(readr)
+library(lubridate)
+
+
+data_url <- "https://raw.githubusercontent.com/ywchiu/rcookbook/master/chapter7/superstore_sales.csv"
+sales_data <- read_csv(data_url)
+
+#struggled to figure out what kind of date time the data had, so i ended up using parse_date_time, which does that for me.
+sales_data <- sales_data %>%
+  mutate(`Order Date` = parse_date_time(`Order Date`, orders = c("mdy", "ymd", "dmy")))
+
+
+sales_data <- sales_data %>%
+  mutate(Month = month(`Order Date`, label = TRUE))
+
+# Task 1: Find the best month for sales
+monthly_sales <- sales_data %>%
+  group_by(Month) %>%
+  summarise(Total_Sales = sum(Sales, na.rm = TRUE))
+
+
+ggplot(monthly_sales, aes(x = Month, y = Total_Sales, fill = Month)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Total Sales by Month", x = "Month", y = "Total Sales") +
+  theme_minimal()
+
+# Task 2: Find the province with the highest sales
+province_sales <- sales_data %>%
+  group_by(Province) %>%
+  summarise(Total_Sales = sum(Sales, na.rm = TRUE)) %>%
+  arrange(desc(Total_Sales))
+
+
+ggplot(province_sales, aes(x = reorder(Province, Total_Sales), y = Total_Sales, fill = Province)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  labs(title = "Total Sales by Province", x = "Province", y = "Total Sales") +
+  theme_minimal()
+
+# Task 3: Find the most sold product category in each province
+category_sales <- sales_data %>%
+  group_by(Province, `Product Category`) %>%
+  summarise(Total_Sales = sum(Sales, na.rm = TRUE)) %>%
+  arrange(Province, desc(Total_Sales)) %>%
+  filter(!is.na(`Product Category`)) %>%
+  group_by(Province) %>%
+  slice(1)  
+
+
+ggplot(category_sales, aes(x = reorder(Province, Total_Sales), y = Total_Sales, fill = `Product Category`)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  labs(title = "Top Product Category by Province", x = "Province", y = "Total Sales") +
+  theme_minimal()
+
+```
+
+```{r}
+library(gapminder)
+library(scales)
+
+
+gapminder_asia <- gapminder %>%
+  filter(continent == "Asia")
+
+# Task (a): Find min and max life expectancy in Asia for each year
+life_exp_range <- gapminder_asia %>%
+  group_by(year) %>%
+  summarise(
+    Min_LifeExp = min(lifeExp),
+    Max_LifeExp = max(lifeExp)
+  ) %>%
+  arrange(desc(year)) 
+
+print(life_exp_range)
+
+# Task (b): Calculate log differentials to measure growth
+life_exp_range <- life_exp_range %>%
+  mutate(
+    Min_LifeExp_Growth = c(NA, diff(log(Min_LifeExp))),
+    Max_LifeExp_Growth = c(NA, diff(log(Max_LifeExp)))
+  )
+
+print(life_exp_range)
+
+# Task (c): Calculate average life expectancy and GDP for each country
+country_avg <- gapminder_asia %>%
+  group_by(country) %>%
+  summarise(
+    Avg_LifeExp = mean(lifeExp),
+    Avg_GDP = mean(gdpPercap)
+  )
+
+top_life_exp <- country_avg %>%
+  arrange(desc(Avg_LifeExp)) %>%
+  head(20)
+
+ggplot(top_life_exp, aes(x = reorder(country, Avg_LifeExp), y = Avg_LifeExp)) +
+  geom_point(color = "blue") +
+  coord_flip() +
+  labs(title = "Top 20 Countries by Average Life Expectancy",
+       x = "Country",
+       y = "Average Life Expectancy") +
+  theme_minimal()
+
+top_gdp <- country_avg %>%
+  arrange(desc(Avg_GDP)) %>%
+  head(20)
+
+ggplot(top_gdp, aes(x = reorder(country, Avg_GDP), y = Avg_GDP)) +
+  geom_point(color = "red") +
+  coord_flip() +
+  labs(title = "Top 20 Countries by Average GDP",
+       x = "Country",
+       y = "Average GDP per Capita") +
+  theme_minimal()
+#Task (d): life expectancy vs gdp per capita
+country_avg <- gapminder %>%
+  group_by(country, continent) %>%  
+  summarise(
+    Avg_LifeExp = mean(lifeExp),
+    Avg_GDP = mean(gdpPercap)
+  )
+
+
+ggplot(country_avg, aes(x = Avg_GDP, y = Avg_LifeExp, color = continent)) +
+  geom_point(size = 3) +
+  scale_x_log10(labels = comma) +  
+  scale_y_continuous(labels = comma) +
+  labs(title = "Life Expectancy vs GDP per Capita",
+       x = "Average GDP per Capita (log scale)",
+       y = "Average Life Expectancy",
+       color = "Continent") +
+  theme_minimal()
+
+```
+
+```{r}
+
+
+
+#Task (e): Calculate the change in life expectancy og countries in on continent
+life_exp_changes <- gapminder_asia %>%
+  group_by(country) %>%
+  arrange(year) %>%  
+  mutate(LifeExp_Change = lifeExp - lag(lifeExp, 1))  
+
+
+ggplot(life_exp_changes, aes(x = year, y = LifeExp_Change, group = country, color = country)) +
+  geom_line() +
+  labs(title = "5-Year Life Expectancy Changes per Country",
+       x = "Year",
+       y = "Life Expectancy Change") +
+  theme_minimal()
+```
+
+Seems like Cambodia had the sharpest drop in life expectancy, most likely due to the Khmer Rouge regime that ruled in the 1970s.
